@@ -26,6 +26,24 @@ const ribbons = [
   { id: 'cerca', label: 'junto da cercinha', x: 86, y: 72 },
 ];
 
+function ArtImage({ src, alt = '' }: { src: string; alt?: string }) {
+  const [failed, setFailed] = useState(false);
+
+  if (failed) {
+    return <span className="artFallback" role={alt ? 'img' : undefined} aria-label={alt || undefined}>✿</span>;
+  }
+
+  return (
+    <img
+      src={src}
+      alt={alt}
+      referrerPolicy="no-referrer"
+      decoding="async"
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
 function Countdown() {
   const eventDate = useMemo(() => new Date('2026-10-31T16:00:00-03:00'), []);
   const [remaining, setRemaining] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
@@ -75,6 +93,7 @@ function Flowers({ amount = 18 }: { amount?: number }) {
 export default function Home() {
   const [entry, setEntry] = useState<'locked' | 'opening' | 'entered'>('locked');
   const [found, setFound] = useState<string[]>([]);
+  const [collecting, setCollecting] = useState<string[]>([]);
   const [activeRibbon, setActiveRibbon] = useState<{ x: number; y: number } | null>(null);
   const [gameMessage, setGameMessage] = useState('Helena perdeu quatro lacinhos pela fazendinha. Encontre o primeiro para ela ir buscar!');
   const [rsvpSent, setRsvpSent] = useState(false);
@@ -90,22 +109,41 @@ export default function Home() {
   }, [entry]);
 
   const enterInvite = () => {
+    if (entry !== 'locked') return;
     setEntry('opening');
-    window.setTimeout(() => setEntry('entered'), 1450);
+    window.setTimeout(() => {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+      setEntry('entered');
+    }, 1250);
   };
 
   const collectRibbon = (ribbon: (typeof ribbons)[number]) => {
-    if (found.includes(ribbon.id)) return;
+    if (found.includes(ribbon.id) || collecting.includes(ribbon.id)) return;
+
+    setCollecting((items) => [...items, ribbon.id]);
     setActiveRibbon({ x: ribbon.x, y: ribbon.y });
     setGameMessage(`Helena viu um lacinho ${ribbon.label}. Ela está indo buscar!`);
+
     window.setTimeout(() => {
-      setFound((items) => [...items, ribbon.id]);
-      setGameMessage(
-        found.length + 1 === ribbons.length
-          ? 'Você encontrou todos os lacinhos! Helena e o cavalinho ficaram prontos para a festa!'
-          : 'Lacinho encontrado! Continue procurando pela fazendinha.',
-      );
+      setCollecting((items) => items.filter((id) => id !== ribbon.id));
+      setFound((items) => {
+        if (items.includes(ribbon.id)) return items;
+        const next = [...items, ribbon.id];
+        setGameMessage(
+          next.length === ribbons.length
+            ? 'Você encontrou todos os lacinhos! Helena e o cavalinho ficaram prontos para a festa!'
+            : 'Lacinho encontrado! Continue procurando pela fazendinha.',
+        );
+        return next;
+      });
     }, 700);
+  };
+
+  const resetGame = () => {
+    setFound([]);
+    setCollecting([]);
+    setActiveRibbon(null);
+    setGameMessage('Helena perdeu quatro lacinhos pela fazendinha. Encontre o primeiro para ela ir buscar!');
   };
 
   const submitRsvp = (event: FormEvent<HTMLFormElement>) => {
@@ -135,24 +173,23 @@ export default function Home() {
           <h1>Helena</h1>
           <div className="openingAge"><strong>6</strong><span>ANOS</span></div>
           <p>Flores, brincadeiras e um cavalinho especial estão esperando por você.</p>
-          <button type="button" onClick={enterInvite} disabled={entry === 'opening'}>
+          <button type="button" onClick={enterInvite} disabled={entry !== 'locked'}>
             <strong>{entry === 'opening' ? 'ENTRANDO NA FAZENDINHA...' : 'COMEÇAR A AVENTURA'}</strong>
             <span>toque para entrar no aniversário</span>
           </button>
         </motion.div>
 
         <div className="openingArt" aria-hidden="true">
-          <motion.div className="girlCutout" animate={entry === 'opening' ? { x: 58, y: 15, rotate: -2, scale: 1.04 } : { x: 0, y: 0, rotate: 0, scale: 1 }} transition={{ duration: 1.1, ease: 'easeInOut' }}>
-            <img src={art.girl} alt="" />
+          <motion.div className="girlCutout" animate={entry === 'opening' ? { x: 44, y: 8, rotate: -1, scale: 1.035 } : { x: 0, y: 0, rotate: 0, scale: 1 }} transition={{ duration: 1, ease: 'easeInOut' }}>
+            <ArtImage src={art.girl} />
           </motion.div>
-          <motion.div className="ponyCutout" animate={entry === 'opening' ? { x: 92, y: -18, rotate: 2, scale: 1.06 } : { x: 0, y: 0, rotate: 0, scale: 1 }} transition={{ duration: 1.1, ease: 'easeInOut' }}>
-            <img src={art.pony} alt="" />
+          <motion.div className="ponyCutout" animate={entry === 'opening' ? { x: 62, y: -12, rotate: 1, scale: 1.045 } : { x: 0, y: 0, rotate: 0, scale: 1 }} transition={{ duration: 1, ease: 'easeInOut' }}>
+            <ArtImage src={art.pony} />
           </motion.div>
           <div className="artRibbon">🎀</div>
         </div>
 
-        <div className="openingCurtain openingCurtain--left" aria-hidden="true" />
-        <div className="openingCurtain openingCurtain--right" aria-hidden="true" />
+        <div className="openingReveal" aria-hidden="true" />
         <AnimatePresence>{entry === 'opening' && <motion.div className="openingWelcome" initial={{ opacity: 0, scale: .86 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}>✨ Pode entrar! A Helena está te esperando. ✨</motion.div>}</AnimatePresence>
       </section>
 
@@ -170,8 +207,8 @@ export default function Home() {
             <p>Helena vai completar <strong>{party.age} anos</strong> e quer viver uma tarde cheia de carinho, cavalinho, flores e brincadeira com pessoas especiais.</p>
             <div className="heroActions"><a href="#missao" className="primaryAction">Começar a brincadeira</a><a href="#presenca" className="secondaryAction">Confirmar presença</a></div>
           </div>
-          <div className="heroCharacter"><img src={art.girl} alt="Ilustração infantil de uma pequena vaqueirinha" /></div>
-          <div className="heroPony"><img src={art.pony} alt="Ilustração infantil de um cavalinho jovem" /></div>
+          <div className="heroCharacter"><ArtImage src={art.girl} alt="Ilustração infantil de uma pequena vaqueirinha" /></div>
+          <div className="heroPony"><ArtImage src={art.pony} alt="Ilustração infantil de um cavalinho jovem" /></div>
           <div className="heroBadge"><strong>{party.age}</strong><span>ANOS DE DOÇURA</span></div>
         </header>
 
@@ -186,16 +223,16 @@ export default function Home() {
         </section>
 
         <section className="storySection">
-          <div className="storyVisual"><div className="storyGirl"><img src={art.girl3d} alt="Ilustração de uma menina pequena em estilo 3D" /></div><div className="storyPony"><img src={art.pony} alt="Ilustração de um cavalinho" /></div><span className="storyLabel">A DONA DA FESTA · HELENA</span></div>
+          <div className="storyVisual"><div className="storyGirl"><ArtImage src={art.girl3d} alt="Ilustração de uma menina pequena em estilo 3D" /></div><div className="storyPony"><ArtImage src={art.pony} alt="Ilustração de um cavalinho" /></div><span className="storyLabel">A DONA DA FESTA · HELENA</span></div>
           <div className="storyCopy"><span className="eyebrow gold">UM RECADINHO PARA VOCÊ</span><h2>Minha aventura fica mais bonita quando você está pertinho.</h2><p>Helena escolheu seu chapéu preferido, separou seus lacinhos e já está contando os dias para brincar com todo mundo.</p><blockquote>“Vem conhecer meu cavalinho e fazer parte do meu dia mais feliz!”</blockquote><span className="signature">— Helena e família</span></div>
         </section>
 
         <section className="gallerySection">
           <div className="sectionHeading light"><span className="eyebrow">O MUNDINHO DA HELENA</span><h2>Delicadeza, campo e cavalinhos</h2><p>Uma pequena vaqueirinha vivendo uma aventura feita para criança.</p></div>
           <div className="galleryGrid">
-            <figure className="galleryGirl"><img src={art.girl} alt="Pequena vaqueirinha em aquarela"/><figcaption>Minha roupa favorita</figcaption></figure>
-            <figure><img src={art.pony} alt="Cavalinho jovem em campo de flores"/><figcaption>Meu companheiro de aventura</figcaption></figure>
-            <figure><img src={art.girl3d} alt="Menina infantil em estilo 3D"/><figcaption>Um dia cheio de brincadeiras</figcaption></figure>
+            <figure className="galleryGirl"><ArtImage src={art.girl} alt="Pequena vaqueirinha em aquarela"/><figcaption>Minha roupa favorita</figcaption></figure>
+            <figure><ArtImage src={art.pony} alt="Cavalinho jovem em campo de flores"/><figcaption>Meu companheiro de aventura</figcaption></figure>
+            <figure><ArtImage src={art.girl3d} alt="Menina infantil em estilo 3D"/><figcaption>Um dia cheio de brincadeiras</figcaption></figure>
           </div>
         </section>
 
@@ -205,25 +242,25 @@ export default function Home() {
             <div className="gameTop"><span>✿ BRINCADEIRA EM ANDAMENTO</span><strong>{found.length}/4 encontrados</strong></div>
             <div className="farmScene">
               <div className="gameSky"/><div className="gameHill one"/><div className="gameHill two"/><div className="gameBarn"><span>FESTA</span></div><div className="gameTree"/><div className="gameFence"/>
-              {ribbons.map((ribbon) => <button key={ribbon.id} className={`ribbon ${found.includes(ribbon.id) ? 'found' : ''}`} style={{ left: `${ribbon.x}%`, top: `${ribbon.y}%` }} onClick={() => collectRibbon(ribbon)} aria-label={`Lacinho ${ribbon.label}`}><span>🎀</span></button>)}
-              <motion.div className="gameAvatar" animate={{ left: `${activeRibbon?.x ?? 10}%`, top: `${activeRibbon?.y ?? 78}%` }} transition={{ type: 'spring', stiffness: 70, damping: 16 }}><div><img src={art.girl3d} alt=""/></div><span>Helena</span></motion.div>
+              {ribbons.map((ribbon) => <button key={ribbon.id} type="button" className={`ribbon ${found.includes(ribbon.id) ? 'found' : ''} ${collecting.includes(ribbon.id) ? 'collecting' : ''}`} style={{ left: `${ribbon.x}%`, top: `${ribbon.y}%` }} onClick={() => collectRibbon(ribbon)} disabled={found.includes(ribbon.id) || collecting.includes(ribbon.id)} aria-label={`Lacinho ${ribbon.label}`}><span>🎀</span></button>)}
+              <motion.div className="gameAvatar" animate={{ left: `${activeRibbon?.x ?? 10}%`, top: `${activeRibbon?.y ?? 78}%` }} transition={{ type: 'spring', stiffness: 70, damping: 16 }}><div><ArtImage src={art.girl3d} /></div><span>Helena</span></motion.div>
               {found.length === ribbons.length && <div className="gameCelebration">✨ Você encontrou todos! ✨</div>}
             </div>
-            <div className="gameStatus"><div>🐴</div><p>{gameMessage}</p><button type="button" onClick={() => { setFound([]); setActiveRibbon(null); setGameMessage('Helena perdeu quatro lacinhos pela fazendinha. Encontre o primeiro para ela ir buscar!'); }}>Recomeçar</button></div>
+            <div className="gameStatus"><div>🐴</div><p>{gameMessage}</p><button type="button" onClick={resetGame}>Recomeçar</button></div>
           </div>
         </section>
 
         <section className="locationSection"><div><span className="eyebrow brown">DESTINO DA AVENTURA</span><h2>{party.place}</h2><p>{party.address}</p></div><a href="https://www.google.com/maps/search/?api=1&query=Ibimirim%20Pernambuco" target="_blank" rel="noreferrer"><Navigation size={18}/>Abrir localização</a></section>
 
         <section className="rsvpSection" id="presenca">
-          <div className="rsvpDecor"><img src={art.pony} alt="" aria-hidden="true" /></div>
+          <div className="rsvpDecor"><ArtImage src={art.pony} /></div>
           <div className="rsvpCard">
             <div className="rsvpCopy"><span className="eyebrow">CONFIRMAÇÃO DE PRESENÇA</span><h2>Vai ser lindo ter você com a gente!</h2><p>Confirme sua presença para a família preparar tudo com muito carinho.</p><ul><li>✓ {party.date}</li><li>✓ A partir das {party.time}</li><li>✓ Festa infantil na {party.place}</li></ul></div>
             {rsvpSent ? <div className="rsvpSuccess"><Sparkles/><h3>Presença confirmada!</h3><p>Seu nome já faz parte da aventura da Helena.</p><button onClick={() => setRsvpSent(false)}>Corrigir resposta</button></div> : <form className="rsvpForm" onSubmit={submitRsvp}><label>Nome do convidado<input name="name" required placeholder="Como podemos chamar você?"/></label><label>Quantas pessoas irão?<select name="guests" defaultValue="1"><option value="1">1 pessoa</option><option value="2">2 pessoas</option><option value="3">3 pessoas</option><option value="4">4 pessoas</option></select></label><label>Recadinho para a Helena <span>(opcional)</span><textarea name="message" rows={3} placeholder="Escreva uma mensagem carinhosa"/></label><button className="confirmButton" type="submit">Confirmar minha presença</button></form>}
           </div>
         </section>
 
-        <section className="closingSection"><div className="closingArt"><img src={art.girl} alt="Pequena vaqueirinha"/><img src={art.pony} alt="Cavalinho"/></div><div className="closingCopy"><span className="eyebrow">ATÉ O GRANDE DIA</span><h2>Helena e seu cavalinho já estão esperando por você.</h2><p>Obrigada por fazer parte dessa aventura tão especial.</p><a href="#inicio">Voltar ao início</a></div></section>
+        <section className="closingSection"><div className="closingArt"><ArtImage src={art.girl} alt="Pequena vaqueirinha"/><ArtImage src={art.pony} alt="Cavalinho"/></div><div className="closingCopy"><span className="eyebrow">ATÉ O GRANDE DIA</span><h2>Helena e seu cavalinho já estão esperando por você.</h2><p>Obrigada por fazer parte dessa aventura tão especial.</p><a href="#inicio">Voltar ao início</a></div></section>
         <footer><span>Feito com carinho para celebrar os {party.age} anos da Helena.</span><small>Desenvolvido por Anderson Jhonatan da K2 Tech</small></footer>
       </div>
     </main>
